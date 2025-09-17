@@ -248,9 +248,8 @@ const addTracksToPlaylist: tool<{
         content: [
           {
             type: 'text',
-            text: `Successfully added ${trackIds.length} track${
-              trackIds.length === 1 ? '' : 's'
-            } to playlist (ID: ${playlistId})`,
+            text: `Successfully added ${trackIds.length} track${trackIds.length === 1 ? '' : 's'
+              } to playlist (ID: ${playlistId})`,
           },
         ],
       };
@@ -259,9 +258,8 @@ const addTracksToPlaylist: tool<{
         content: [
           {
             type: 'text',
-            text: `Error adding tracks to playlist: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+            text: `Error adding tracks to playlist: ${error instanceof Error ? error.message : String(error)
+              }`,
           },
         ],
       };
@@ -359,6 +357,53 @@ const addToQueue: tool<{
   },
 };
 
+const setVolume: tool<{
+  volume: z.ZodNumber;
+  deviceId: z.ZodOptional<z.ZodString>;
+}> = {
+  name: 'setVolume',
+  description: 'Set the volume on a Spotify device',
+  schema: {
+    volume: z
+      .number()
+      .min(0)
+      .max(100)
+      .describe('The volume level to set (0-100)'),
+    deviceId: z
+      .string()
+      .optional()
+      .describe('The Spotify device ID to set volume on'),
+  },
+  handler: async (args, _extra: SpotifyHandlerExtra) => {
+    const { volume, deviceId } = args;
+
+    try {
+      await handleSpotifyRequest(async (spotifyApi) => {
+        await spotifyApi.player.setPlaybackVolume(volume, deviceId || '');
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Volume set to ${volume}%${deviceId ? ` on device ${deviceId}` : ' on active device'}`,
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error setting volume: ${error instanceof Error ? error.message : String(error)
+              }`,
+          },
+        ],
+      };
+    }
+  },
+};
+
 export const playTools = [
   playMusic,
   pausePlayback,
@@ -368,4 +413,5 @@ export const playTools = [
   addTracksToPlaylist,
   resumePlayback,
   addToQueue,
+  setVolume,
 ];

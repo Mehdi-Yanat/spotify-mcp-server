@@ -48,62 +48,40 @@ const searchSpotify: tool<{
         );
       });
 
-      let formattedResults = '';
+      let content: Array<{ type: 'text'; text: string }> = [];
 
       if (type === 'track' && results.tracks) {
-        formattedResults = results.tracks.items
-          .map((track, i) => {
-            const artists = track.artists.map((a) => a.name).join(', ');
-            const duration = formatDuration(track.duration_ms);
-            return `${i + 1}. "${
-              track.name
-            }" by ${artists} (${duration}) - ID: ${track.id}`;
-          })
-          .join('\n');
+        content = results.tracks.items.map((track) => ({
+          type: 'text',
+          text: `"${track.name}" by ${track.artists.map((a) => a.name).join(', ')} (${formatDuration(track.duration_ms)}) - ID: ${track.id}`,
+        }));
       } else if (type === 'album' && results.albums) {
-        formattedResults = results.albums.items
-          .map((album, i) => {
-            const artists = album.artists.map((a) => a.name).join(', ');
-            return `${i + 1}. "${album.name}" by ${artists} - ID: ${album.id}`;
-          })
-          .join('\n');
+        content = results.albums.items.map((album) => ({
+          type: 'text',
+          text: `"${album.name}" by ${album.artists.map((a) => a.name).join(', ')} - ID: ${album.id}`,
+        }));
       } else if (type === 'artist' && results.artists) {
-        formattedResults = results.artists.items
-          .map((artist, i) => {
-            return `${i + 1}. ${artist.name} - ID: ${artist.id}`;
-          })
-          .join('\n');
+        content = results.artists.items.map((artist) => ({
+          type: 'text',
+          text: `${artist.name} - ID: ${artist.id}`,
+        }));
       } else if (type === 'playlist' && results.playlists) {
-        formattedResults = results.playlists.items
-          .map((playlist, i) => {
-            return `${i + 1}. "${playlist?.name ?? 'Unknown Playlist'} (${
-              playlist?.description ?? 'No description'
-            } tracks)" by ${playlist?.owner?.display_name} - ID: ${
-              playlist?.id
-            }`;
-          })
-          .join('\n');
+        content = results.playlists.items.map((playlist) => ({
+          type: 'text',
+          text: `"${playlist?.name ?? 'Unknown Playlist'} (${playlist?.description ?? 'No description'
+            } tracks)" by ${playlist?.owner?.display_name} - ID: ${playlist?.id
+            }`,
+        }));
       }
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text:
-              formattedResults.length > 0
-                ? `# Search results for "${query}" (type: ${type})\n\n${formattedResults}`
-                : `No ${type} results found for "${query}"`,
-          },
-        ],
-      };
+      return { content };
     } catch (error) {
       return {
         content: [
           {
             type: 'text',
-            text: `Error searching for ${type}s: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+            text: `Error searching for ${type}s: ${error instanceof Error ? error.message : String(error)
+              }`,
           },
         ],
       };
@@ -170,9 +148,8 @@ const getNowPlaying: tool<Record<string, never>> = {
         content: [
           {
             type: 'text',
-            text: `Error getting current track: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
+            text: `Error getting current track: ${error instanceof Error ? error.message : String(error)
+              }`,
           },
         ],
       };
@@ -216,9 +193,8 @@ const getMyPlaylists: tool<{
     const formattedPlaylists = playlists.items
       .map((playlist, i) => {
         const tracksTotal = playlist.tracks?.total ? playlist.tracks.total : 0;
-        return `${i + 1}. "${playlist.name}" (${tracksTotal} tracks) - ID: ${
-          playlist.id
-        }`;
+        return `${i + 1}. "${playlist.name}" (${tracksTotal} tracks) - ID: ${playlist.id
+          }`;
       })
       .join('\n');
 
@@ -438,4 +414,73 @@ export const readTools = [
   getPlaylistTracks,
   getRecentlyPlayed,
   getUsersSavedTracks,
+  // New: list available playback devices for selection
+  {
+    name: 'listDevices',
+    description:
+      'List available Spotify playback devices (ID, name, type, volume, active)',
+    schema: {},
+    handler: async (_args: any, _extra: SpotifyHandlerExtra) => {
+      try {
+        const devicesResponse = await handleSpotifyRequest(async (spotifyApi) => {
+          return await spotifyApi.player.getAvailableDevices();
+        });
+
+        const devices = devicesResponse?.devices ?? [];
+
+        if (devices.length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text:
+                  'No available Spotify devices found. Open Spotify on a device and try again.',
+              },
+            ],
+          };
+        }
+
+        const formatted = devices
+          .map((d, i) => {
+            const parts: string[] = [];
+            parts.push(`${i + 1}. ${d.name ?? 'Unknown Device'}`);
+            parts.push(`Type: ${d.type ?? 'unknown'}`);
+            parts.push(`Active: ${d.is_active ? 'Yes' : 'No'}`);
+            if (typeof d.volume_percent === 'number') {
+              parts.push(`Volume: ${d.volume_percent}%`);
+            }
+            parts.push(`ID: ${d.id ?? 'N/A'}`);
+            return parts.join(' | ');
+          })
+          .join('\n');
+
+        const active = devices.find((d) => d.is_active);
+        const hint =
+          '\n\nTip: pass the chosen device\'s ID to tools like playMusic, pausePlayback, or resumePlayback via the deviceId parameter.';
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text:
+                `# Available Spotify Devices` +
+                (active ? `\n\nActive device: ${active.name} (ID: ${active.id})` : '') +
+                `\n\n${formatted}` +
+                hint,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error listing devices: ${error instanceof Error ? error.message : String(error)
+                }`,
+            },
+          ],
+        };
+      }
+    },
+  },
 ];

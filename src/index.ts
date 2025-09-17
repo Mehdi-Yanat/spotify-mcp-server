@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { albumTools } from './albums.js';
 import { playTools } from './play.js';
 import { readTools } from './read.js';
+import { SpotifyHandlerExtra } from './types.js';
 
 const server = new McpServer({
   name: 'spotify-controller',
@@ -10,7 +11,15 @@ const server = new McpServer({
 });
 
 [...readTools, ...playTools, ...albumTools].forEach((tool) => {
-  server.tool(tool.name, tool.description, tool.schema, tool.handler);
+  server.tool(tool.name, tool.description, tool.schema, async (args: any, extra: SpotifyHandlerExtra) => {
+    const result = await tool.handler(args, extra);
+    return {
+      content: result.content.map(item => ({
+        ...item,
+        type: "text" as const
+      }))
+    };
+  });
 });
 
 async function main() {
